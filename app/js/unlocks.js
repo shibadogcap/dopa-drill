@@ -2,7 +2,7 @@
 // Dopakichi's costume and colour, the crowd and the finale. Each item is the
 // reward of one trophy (never random), so what is unlocked follows from the
 // trophies earned; only the player's choice per category is saved.
-import { TROPHY } from './trophies.js';
+import { TROPHIES } from './trophies.js';
 
 export const CATS = [
   { key: 'bg', name: 'はいけい' },
@@ -21,7 +21,7 @@ export const ITEM = {};
 export function addItems(list) {
   for (const it of list) {
     ITEMS.push(it); ITEM[it.id] = it;
-    if (it.trophy && TROPHY[it.trophy]) TROPHY[it.trophy].reward = it.id;
+    if (it.trophy) { const t = TROPHIES.find((x) => x.id === it.trophy); if (t) t.reward = it.id; }
   }
 }
 addItems([

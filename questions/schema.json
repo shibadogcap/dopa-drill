@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema",
+  "$id": "https://dopa-drill.tanosix.com/questions/schema.json",
+  "title": "DopaDrill Question Set",
+  "description": "汎用マルバツ/選択問題のスキーマ。問題データは base64 埋め込み画像を持つ。",
+  "type": "object",
+  "required": ["version", "sets"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "sets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "passScore", "timeLimit", "questions"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "passScore": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "timeLimit": {
+            "type": "integer",
+            "description": "制限時間（秒）"
+          },
+          "questions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["id", "type", "text", "options", "answer"],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": ["choice", "truefalse"]
+                },
+                "text": {
+                  "type": "string"
+                },
+                "image": {
+                  "type": "string",
+                  "description": "base64 data URL (data:image/...;base64,...)"
+                },
+                "options": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 4,
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "answer": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "正解のインデックス"
+                },
+                "explanation": {
+                  "type": "string"
+                },
+                "explanationImage": {
+                  "type": "string",
+                  "description": "解説用 base64 data URL"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

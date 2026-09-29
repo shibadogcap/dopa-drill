@@ -1,0 +1,8 @@
+{
+  "appId": "com.tanosix.dopadrill",
+  "appName": "ドパドリル",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

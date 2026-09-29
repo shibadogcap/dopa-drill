@@ -1,0 +1,87 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web assets
+        run: pnpm build
+
+      # Question JSON files are gitignored. If the runner injects them
+      # (e.g. decoded from a secret), copy them into the web assets.
+      # Without data the app still builds and runs (shows a load error).
+      - name: Copy question data if present
+        run: |
+          mkdir -p dist/questions
+          if ls questions/*.json >/dev/null 2>&1; then
+            cp questions/*.json dist/questions/
+            ls dist/questions/
+          else
+            echo "no question data, skipping"
+          fi
+
+      # android/ is gitignored, so recreate the platform, then re-apply
+      # the kotlin-stdlib-jdk7/jdk8 global exclude (cordova pulls 1.6.21
+      # split artifacts that duplicate classes in kotlin-stdlib 1.8+).
+      - name: Setup Capacitor Android platform
+        run: |
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+          python3 - <<'EOF'
+          from pathlib import Path
+          p = Path('android/build.gradle')
+          s = p.read_text()
+          if 'kotlin-stdlib-jdk7' not in s:
+              s = s.replace(
+                  "allprojects {\n    repositories {\n        google()\n        mavenCentral()\n    }\n}",
+                  "allprojects {\n    repositories {\n        google()\n        mavenCentral()\n    }\n"
+                  "    configurations.all {\n"
+                  "        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'\n"
+                  "        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'\n"
+                  "    }\n}",
+              )
+              p.write_text(s)
+              print('patched android/build.gradle')
+          else:
+              print('already patched')
+          EOF
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build APK
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: android/app/build/outputs/apk/release/*.apk
