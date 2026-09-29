@@ -822,6 +822,10 @@ function bindUI() {
 
 // ---------------------------------------------------------------- init
 async function init() {
+  // Dev-only annotation toolbar (never bundled into production builds).
+  if (import.meta.env.DEV) {
+    import('agent-ui-annotation').then(({ createAnnotation }) => createAnnotation()).catch(() => {});
+  }
   startClock();
   bindUI();
   
