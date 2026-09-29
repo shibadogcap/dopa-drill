@@ -101,6 +101,42 @@ button:focus-visible { outline: 4px solid var(--yellow); outline-offset: 3px; }
 body.reduced .logo *, body.reduced .logo-burst { animation: none !important; }
 .settings-btn { display: grid; place-items: center; position: absolute; top: calc(12px + env(safe-area-inset-top)); right: 14px; width: 48px; height: 48px; padding: 4px; background: #fff; box-shadow: 0 4px 0 var(--ink); z-index: 3; }
 .settings-btn svg { display: block; width: 100%; height: 100%; transition: transform .4s; }
+.help-btn { top: calc(72px + env(safe-area-inset-top)); }
+.tree-head { display: flex; align-items: center; gap: 10px; padding: 0 14px 6px; }
+.tree-head h2 { margin: 0; flex: 1; font-family: var(--chunky); font-weight: 400; font-size: 22px; }
+.tree-head .icon-btn { font-size: 26px; font-weight: 900; line-height: 1; }
+.tree-count { font-family: var(--chunky); font-size: 16px; padding: 4px 10px; border: 2.5px solid var(--ink); border-radius: 999px; background: #fff; }
+
+/* ------------------------------------------------------------ title guide */
+#guide { position: fixed; inset: 0; z-index: 10; touch-action: none; }
+#guide[hidden] { display: none; }
+.guide-shade, #guide-actor { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#guide-actor { overflow: visible; }
+#guide-skip { position: absolute; top: calc(12px + env(safe-area-inset-top)); right: 16px; min-width: 90px; min-height: 44px; background: var(--paper); }
+#guide-card { position: absolute; left: 50%; transform: translateX(-50%); width: min(360px, calc(100% - 32px)); padding: 16px; border: 3px solid var(--ink); border-radius: 22px 18px 24px 16px; box-shadow: 0 6px 0 var(--ink); background: var(--paper); text-align: center; }
+#guide-heading { margin: 0 0 8px; font-size: 20px; line-height: 1.4; }
+#guide-text { margin: 0; white-space: pre-line; font-size: 15px; line-height: 1.7; }
+#guide-dots { display: flex; justify-content: center; gap: 9px; margin: 14px 0; }
+#guide-dots i { width: 10px; height: 10px; border: 2px solid var(--ink); border-radius: 50%; background: #fff; }
+#guide-dots .current { background: var(--pink); transform: scale(1.25); }
+.guide-actions { display: flex; gap: 12px; }
+.guide-actions button { flex: 1; min-width: 0; height: 48px; font-size: 18px; padding: 0 8px; }
+#guide-back:disabled { opacity: .4; cursor: default; }
+#guide-recommend { position: absolute; padding: 2px 8px; border: 2px solid var(--ink); border-radius: 6px; background: var(--yellow); font-size: 13px; font-weight: 900; transform: rotate(-4deg); }
+body.guide-open .logo *, body.guide-open .logo-burst { animation: none !important; }
+@media (max-height: 680px) {
+  #guide-card { padding: 12px; }
+  #guide-heading { font-size: 18px; }
+  #guide-text { font-size: 14px; }
+  #guide-dots { margin: 12px 0; }
+}
+#guide.guide-last #guide-skip { left: 16px; right: auto; }
+#guide-help-ring { animation: guide-help-pulse 1.4s ease-in-out infinite; }
+.guide-help-icon { position: relative; display: inline-grid; place-items: center; vertical-align: middle; width: 32px; height: 32px; padding: 3px; margin: 4px 3px; background: #fff; box-shadow: 0 3px 0 var(--ink); cursor: default; }
+.guide-help-icon svg { display: block; width: 100%; height: 100%; }
+.guide-help-fallback::after { content: ''; position: absolute; inset: -5px; border: 2px solid var(--yellow); border-radius: 14px; animation: guide-help-pulse 1.4s ease-in-out infinite; }
+@keyframes guide-help-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+body.reduced #guide-help-ring, body.reduced .guide-help-fallback::after { animation: none; }
 #open-settings:active svg { transform: rotate(90deg); }
 .modes { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 
@@ -116,6 +152,7 @@ body.reduced .logo *, body.reduced .logo-burst { animation: none !important; }
 .set-inline { display: flex; align-items: center; gap: 12px; }
 .set-inline .slider { flex: 1; }
 .set-note { margin: 0; font-size: 12px; opacity: .7; }
+.url-input { width: 100%; min-height: 44px; padding: 8px 12px; border: 2.5px solid var(--ink); border-radius: 14px; background: #fff; font: inherit; font-size: 14px; }
 .reset-btn { align-self: center; min-width: 230px; font-weight: 900; }
 .modal .pick { justify-content: center; }
 .modal .pick button { width: 30%; max-width: 96px; }
@@ -158,6 +195,10 @@ body.reduced .logo *, body.reduced .logo-burst { animation: none !important; }
 .pip.now { background: var(--yellow); animation: pip 0.8s ease-in-out infinite; }
 .pip.done { background: var(--c, var(--blue)); }
 .pip.rainbow { background: conic-gradient(#ff7ab6, #ffd23f, #3fdcb0, #3b6bff, #a77bff, #ff7ab6); }
+.pips.many { gap: 8px; }
+.pcount { font-family: var(--chunky); font-weight: 400; font-size: 15px; white-space: nowrap; }
+.ptrack { flex: 1; height: 10px; border: 2.5px solid var(--ink); border-radius: 999px; background: #fff; overflow: hidden; }
+.ptrack i { display: block; height: 100%; background: linear-gradient(90deg, var(--pink), var(--yellow)); transform: scaleX(0); transform-origin: left center; }
 @keyframes pip { 50% { transform: scale(1.3); } }
 .clock { display: flex; align-items: baseline; gap: 8px; padding: 4px 12px; border: 2.5px solid var(--ink); border-radius: 999px; background: #fff; font-size: 12px; white-space: nowrap; }
 .clock b { font-family: var(--chunky); font-weight: 400; font-size: 18px; font-variant-numeric: tabular-nums; }
@@ -200,7 +241,8 @@ body.lv6 .dopa { background: linear-gradient(90deg, #ffd23f, #ff9ccc, #9fd0ff, #
 .combo.hot .combo-mult { opacity: 1; color: var(--red); }
 .combo.hurry .combo-track i { background: var(--red); }
 
-.stage { position: relative; flex: 1 1 auto; min-height: 118px; margin: 0 14px; }
+.stage { position: relative; flex: 0 0 auto; min-height: 64px; margin: 0 14px; }
+#screen-play .card { margin-top: 2px; }
 .ground { position: absolute; left: 6%; right: 6%; bottom: 6px; width: 88%; height: 14px; }
 .bunting { position: absolute; left: -2%; right: -2%; top: 0; width: 104%; height: 34px; opacity: 0; transform: translateY(-20px); transition: opacity .5s, transform .5s cubic-bezier(.3, 1.6, .5, 1); }
 body.lv3 .bunting { opacity: 1; transform: none; }
@@ -228,6 +270,7 @@ body.lv5 .spot { opacity: .7; }
 .step-label { margin: 2px 0 0; text-align: center; font-size: 14px; min-height: 20px; }
 .step-label b { color: var(--blue); }
 .explanation { display: block; margin-top: 4px; font-size: 13px; font-weight: 700; color: var(--violet); }
+.explanation-img { display: block; margin: 6px auto 0; max-width: 100%; max-height: 110px; border-radius: 8px; }
 
 .stamp {
   position: absolute; right: 14px; top: 34px; width: 110px; height: 110px; border-radius: 50%; border: 9px solid var(--red); opacity: 0;
@@ -300,10 +343,10 @@ body.reduced .logo span, body.reduced .spot, body.reduced .marquee, body.reduced
   #screen-play .card { padding-block: 8px; margin-bottom: 10px; }
   .pad { gap: 8px; padding-top: 8px; }
   .pad button { height: 52px; }
-  .stage { min-height: 80px; }
+  .stage { min-height: 56px; }
 }
 @media (max-height: 600px) {
-  .stage { min-height: 48px; }
+  .stage { min-height: 40px; }
   .step-label { font-size: 12px; }
 }
 

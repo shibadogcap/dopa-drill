@@ -124,7 +124,7 @@
         <dl class="stats">
           <div><dt>正解</dt><dd id="r-ok">0問</dd></div>
           <div><dt>おしい</dt><dd id="r-ng">0回</dd></div>
-          <dt>正答率</dt><dd id="r-rate">0%</dd></div>
+          <div><dt>正答率</dt><dd id="r-rate">0%</dd></div>
           <div><dt>タイム</dt><dd id="r-time">0:00</dd></div>
         </dl>
         <p class="dopa-final"><small>ドパ</small><b id="r-dopa">0</b></p>
@@ -155,6 +155,11 @@
         <span class="set-label">動きの強さ <b id="motion-val">100%</b></span>
         <input type="range" class="slider motion" id="motion" min="0" max="100" step="1" value="100" aria-label="動きの強さ" aria-describedby="motion-note">
         <p class="set-note" id="motion-note">0%で揺れ・光・紙吹雪・移動を止めます</p>
+      </div>
+      <div class="set-row">
+        <span class="set-label">問題データのURL</span>
+        <input type="url" class="url-input" id="data-url" placeholder="https://example.com/questions/" aria-label="問題データのURL" inputmode="url">
+        <p class="set-note" id="data-url-note">空欄のときはアプリ内蔵のデータを使います。Web上の問題JSON置き場を指定できます</p>
       </div>
       <div class="set-row">
         <span class="set-label">データ</span>

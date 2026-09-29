@@ -1,11 +1,9 @@
 // Title tour: captions belong to the interface, never to the mascot.
-const INTRO = { title: 'あそびかた', text: 'もんだいは 3つの\nえらびかたが あるよ' };
-const LEVEL = { target: '#start', title: 'じぶんレベル', text: 'いまの きみに あった もんだい。\nはじめは じつりょくチェック' };
-const GRADES = { target: '.grades', title: '1ねんせい〜6ねんせい', text: 'がくねんの もんだいを\nまとめて れんしゅう' };
-const TREE = { target: '#open-tree', title: 'スキルツリー', text: 'やりたい もんだいを\n1つ えらんで れんしゅう' };
+const INTRO = { title: 'あそびかた', text: '本免問題に チャレンジ！\n90問 解いて 85点で 合格' };
+const SETS = { target: '#set-list', title: '問題セット', text: '10セットから えらんで\nスタート！' };
 const TROPHY = { target: '#open-trophy', title: 'トロフィー', text: 'あそぶと もらえるよ。\nつづけて あそぶと ふえていく' };
 const COLLECTION = { target: '#open-collect', title: 'コレクション', text: 'トロフィーの ごほうびで ふえる\nはいけい・おんがく・きせかえなどを\nえらべるよ' };
-const LAST = { target: '#start', title: 'まよったら じぶんレベル！', text: 'この せつめいは\n？ で また みられるよ', recommend: true };
+const LAST = { target: '#start', title: 'まずは 1セット！', text: 'この せつめいは\n？ で また みられるよ', recommend: true };
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 // Use measured body + arm bounds. Hard constraints always outrank label coverage.
@@ -238,7 +236,7 @@ export function createGuide({ hero, reduced, onClose }) {
   function open({ help = false } = {}) {
     if (active) return;
     saved = { focus: document.activeElement, scroll: title.scrollTop, inert: app.inert, bodyParent: hero.root.parentNode, armsParent: hero.armsFront.parentNode };
-    pages = [INTRO, LEVEL, GRADES, TREE, ...(help ? [TROPHY, COLLECTION] : []), LAST];
+    pages = [INTRO, SETS, ...(help ? [TROPHY, COLLECTION] : []), LAST];
     index = 0; active = true;
     overlay.hidden = false;
     document.body.classList.add('guide-open');

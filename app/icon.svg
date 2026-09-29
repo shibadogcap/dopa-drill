@@ -1,16 +1,45 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
-  <rect width="108" height="108" fill="#FFF8EC"/>
-  <g transform="translate(54,83.5) scale(0.3)" stroke="#000" stroke-width="5" stroke-linejoin="round">
-    <ellipse cx="-74.2" cy="-105.3" rx="31" ry="31.3" fill="#ff97bf"/>
-    <ellipse cx="-74.2" cy="-105.3" rx="21.1" ry="22" fill="#ffe6f0"/>
-    <ellipse cx="74.2" cy="-105.3" rx="31" ry="31.3" fill="#ff97bf"/>
-    <ellipse cx="74.2" cy="-105.3" rx="21.1" ry="22" fill="#ffe6f0"/>
-    <path d="M-37.4 -65.7 C-49.7 -73.1 -56.3 -82.1 -56.3 -98.5 C-56.3 -129.6 -32.9 -149.2 0 -149.2 C32.9 -149.2 56.3 -129.6 56.3 -98.5 C56.3 -82.1 49.7 -73.1 37.4 -65.7 C20 -58 -20 -58 -37.4 -65.7Z" fill="#ff97bf"/>
-    <path d="M0 -133 C29.7 -133 48.2 -121.7 48.2 -96.5 C48.2 -71.3 25.7 -61.2 0 -61.2 C-25.7 -61.2 -48.2 -71.3 -48.2 -96.5 C-48.2 -121.7 -29.7 -133 0 -133Z" fill="#fff3e4"/>
-    <circle cx="-23.4" cy="-93.8" r="11.2" fill="#fff" stroke-width="3.5"/>
-    <circle cx="-23.4" cy="-93.8" r="8.6" fill="#ff97bf" stroke-width="3.5"/>
-    <circle cx="23.4" cy="-93.8" r="11.2" fill="#fff" stroke-width="3.5"/>
-    <circle cx="23.4" cy="-93.8" r="8.6" fill="#ff97bf" stroke-width="3.5"/>
-    <path d="M-8.1 -80.3 C-4.9 -76 4.9 -76 8.1 -80.3" fill="none" stroke-width="3.5" stroke-linecap="round"/>
-  </g>
+<rect width="108" height="108" fill="#FFF8EC"/>
+<g transform="translate(2.2,9.6) scale(0.0565)" stroke="#000" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+
+    <g id="ear-left">
+      <ellipse fill="#FF97BF" cx="505" cy="785" rx="172" ry="174"/><g id="ear-left-inner">
+        <ellipse fill="#FFE6F0" cx="505" cy="785" rx="117" ry="122"/></g>
+    </g>
+    <g id="ear-right">
+      <ellipse fill="#FF97BF" cx="1329" cy="785" rx="172" ry="174"/><g id="ear-right-inner">
+        <ellipse fill="#FFE6F0" cx="1329" cy="785" rx="117" ry="122"/></g>
+    </g>
+    <g id="head-shape">
+      <path fill="#FF97BF" d="M709 1005 C641 964 604 914 604 823 C604 650 734 541 917 541 C1100 541 1230 650 1230 823 C1230 914 1193 964 1125 1005 L917 980Z"/>
+      <path fill="none" d="M709 1005 C641 964 604 914 604 823 C604 650 734 541 917 541 C1100 541 1230 650 1230 823 C1230 914 1193 964 1125 1005"/>
+    </g>
+    <g id="face">
+      <path fill="#FFF3E4" d="M917 631 C1082 631 1185 694 1185 834 C1185 974 1060 1030 917 1030 C774 1030 649 974 649 834 C649 694 752 631 917 631Z"/>
+    </g>
+    <g id="eye-left">
+      <g id="eye-left-white">
+        <ellipse fill="#FFF" cx="787" cy="849" rx="62" ry="62"/></g>
+      <g id="eye-left-pink">
+        <ellipse fill="#FF97BF" cx="787" cy="849" rx="48" ry="48"/></g>
+    </g>
+    <g id="eye-right">
+      <g id="eye-right-white">
+        <ellipse fill="#FFF" cx="1047" cy="849" rx="62" ry="62"/></g>
+      <g id="eye-right-pink">
+        <ellipse fill="#FF97BF" cx="1047" cy="849" rx="48" ry="48"/></g>
+    </g>
+    <g id="brow-left">
+      <ellipse fill="#FF97BF" cx="842" cy="752" rx="17" ry="10"/></g>
+    <g id="brow-right">
+      <ellipse fill="#FF97BF" cx="992" cy="752" rx="17" ry="10"/></g>
+    <g id="cheeks">
+      <ellipse fill="#FFE6F0" cx="747" cy="934" rx="24" ry="15"/>
+      <ellipse fill="#FFE6F0" cx="1087" cy="934" rx="24" ry="15"/>
+    </g>
+    <g id="mouth">
+      <path fill="none" d="M872 924 C890 948 944 948 962 924"/>
+    </g>
+  
+</g>
 </svg>

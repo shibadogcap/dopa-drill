@@ -52,6 +52,7 @@ const guide = createGuide({ hero, reduced: () => S.reduced, onClose: () => {
   checkLoginBonus();
 }});
 
+let titleRewardTimer = 0;
 function openGuide(help = false) {
   if (S.demo || S.screen !== 'title' || S.guideOpen || S.settingsOpen || S.bonusOpen || S.trophyOpen || S.confirm || S.scene) return;
   clearTimeout(titleRewardTimer);
@@ -110,13 +111,20 @@ function layoutActors() {
 }
 
 // ---------------------------------------------------------------- set selection
+function dataBase() {
+  const url = (store.settings().dataUrl || '').trim();
+  return url || 'questions/';
+}
+
 async function initSets() {
+  quiz.setBase(dataBase());
   try {
     S.sets = await quiz.loadSets();
     renderSetList();
   } catch (err) {
     console.error('Failed to load sets:', err);
-    $('#set-list').innerHTML = '<p class="hint">問題データを読み込めませんでした</p>';
+    const from = quiz.dataSource;
+    $('#set-list').innerHTML = `<p class="hint">問題データを読み込めませんでした（${from}）<br>せっていで問題データのURLを確認してください</p>`;
   }
 }
 
@@ -158,11 +166,17 @@ async function startQuiz(setId) {
   $('#ok-total').textContent = `/${S.currentSet.questions.length}`;
   const pips = $('#pips');
   pips.innerHTML = '';
-  pips.classList.toggle('many', S.currentSet.questions.length > 10);
-  for (let i = 0; i < S.currentSet.questions.length; i++) {
-    const s = document.createElement('span');
-    s.className = 'pip';
-    pips.appendChild(s);
+  // Many questions (e.g. 90): a compact progress bar instead of 90 dots.
+  S.manyPips = S.currentSet.questions.length > 20;
+  pips.classList.toggle('many', S.manyPips);
+  if (S.manyPips) {
+    pips.innerHTML = `<span class="pcount" id="pcount"></span><i class="ptrack"><i id="pfill"></i></i>`;
+  } else {
+    for (let i = 0; i < S.currentSet.questions.length; i++) {
+      const s = document.createElement('span');
+      s.className = 'pip';
+      pips.appendChild(s);
+    }
   }
   updateTally();
   audio.key = 0;
@@ -188,7 +202,14 @@ async function setupQuestion() {
   
   S.wrongInQ = false;
   S.shownWrong = null;
-  $$('.pip').forEach((pp, i) => pp.classList.toggle('now', i === S.questionIndex));
+  if (S.manyPips) {
+    const pc = $('#pcount');
+    if (pc) pc.textContent = `${S.questionIndex + 1}/${S.currentSet.questions.length}`;
+    const pf = $('#pfill');
+    if (pf) pf.style.transform = `scaleX(${(S.questionIndex / S.currentSet.questions.length).toFixed(3)})`;
+  } else {
+    $$('.pip').forEach((pp, i) => pp.classList.toggle('now', i === S.questionIndex));
+  }
   $('#qtitle').textContent = S.currentSet.title;
   $('#qno').textContent = `第${S.questionIndex + 1}問`;
   
@@ -273,15 +294,25 @@ function pressVisual(btn) {
 
 function answerQuestion(answerIndex) {
   if (S.screen !== 'play' || !S.ready) return;
-  const btn = padButtons[answerIndex] || $$(`#pad button`)[answerIndex];
+  const btn = $$(`#pad button`)[answerIndex];
   pressVisual(btn);
-  
+  S.ready = false;
+  // The monkey carries the answer from the button to the card, then scoring.
+  const from = btn ? centerOf(btn) : centerOf(card);
+  const to = centerOf(card);
+  const label = quiz.getCurrentQuestion()?.options[answerIndex] ?? '';
+  audio.keyTap(S.combo);
+  hero.carry(from, to, label, {
+    E: S.E,
+    onGrab: () => audio.grab(),
+    onPlace: () => { audio.place(); applyAnswer(answerIndex); },
+  });
+}
+
+function applyAnswer(answerIndex) {
   const result = quiz.answer(S.questionIndex, answerIndex);
   if (!result) return;
-  
-  S.ready = false;
   S.qMs = now() - S.qStart;
-  
   if (result.correct) {
     S.solved += 1;
     S.firstTry += 1;
@@ -295,13 +326,10 @@ function answerQuestion(answerIndex) {
     onWrong();
   }
   updateTally();
-  
-  // Show explanation briefly
   showExplanation(result);
-  
   setTimeout(async () => {
     if (S.screen !== 'play') return;
-    await wait(1200);
+    await wait(1400);
     if (S.screen !== 'play') return;
     quiz.nextQuestion();
     S.questionIndex++;
@@ -310,20 +338,23 @@ function answerQuestion(answerIndex) {
     } else {
       setupQuestion();
     }
-  }, 1200);
+  }, 1400);
 }
 
+// The explanation panel always shows after answering, right or wrong.
+// Per-question explanation text comes from the data when present.
 function showExplanation(result) {
   const label = $('#step-label');
-  if (result.correct) {
-    label.innerHTML = '<b>正解！</b>';
-    label.style.color = 'var(--mint)';
-  } else {
-    label.innerHTML = `<b>不正解</b>　正解は「${result.correctAnswer === 0 ? '正解' : '不正解'}」`;
-    label.style.color = 'var(--red)';
-  }
+  const verdict = result.correct ? 'この文は正しい' : 'この文はまちがい';
+  label.innerHTML = result.correct
+    ? `<b>⭕ 正解！</b>　${verdict}`
+    : `<b>❌ 不正解</b>　${verdict}`;
+  label.style.color = result.correct ? 'var(--mint)' : 'var(--red)';
   if (result.explanation) {
-    label.innerHTML += `<br><span class="explanation">${result.explanation}</span>`;
+    label.innerHTML += `<br><span class="explanation">解説　${result.explanation}</span>`;
+  }
+  if (result.explanationImage) {
+    label.innerHTML += `<br><img class="explanation-img" src="${result.explanationImage}" alt="解説画像">`;
   }
 }
 
@@ -346,6 +377,7 @@ function onCorrect() {
   const E = S.E;
   const c = centerOf(card);
   popEl(card, 0.7 + E * 0.5);
+  hanamaru(E);
   if (!S.reduced) {
     fx.burst(c.x, c.y, { count: Math.round(6 + 22 * E), speed: 260 + 260 * E, kinds: burstKinds(E).filter((k) => k !== 'mini' && k !== 'coin'), up: 120, life: 0.55 });
     if (E > 0.35) fxBack.burst(c.x, c.y, { count: Math.round(30 * E), speed: 700, kinds: burstKinds(E), up: 200 });
@@ -461,7 +493,7 @@ async function showResults() {
   $('#result-title').textContent = S.currentSet.title;
   $('#r-score').textContent = results.score;
   $('#r-pass-fail').textContent = results.passed ? '合格！' : '不合格...';
-  $('#r-pass-fail').className = results.paid ? 'pass' : 'fail';
+  $('#r-pass-fail').className = results.passed ? 'pass' : 'fail';
   $('#r-ok').textContent = `${results.correct}問`;
   $('#r-ng').textContent = `${results.wrong}回`;
   $('#r-rate').textContent = `${Math.round((results.correct / results.total) * 100)}%`;
@@ -626,6 +658,47 @@ function celebrate(E, big, lastBasic) {
 }
 
 // ---------------------------------------------------------------- unlockable show
+// Hand-drawn "hanamaru" (flower circle) mark, the classic Japanese school "correct".
+function hanamaru(E, el = $('#stamp'), style = ul.variant(S.look && S.look.mark)) {
+  if (style !== 'hanamaru' && MARKS[style]) { drawMark(el, style, E, { preview: el.id !== 'stamp' }); return; }
+  const flower = E >= 0.45;
+  const size = flower ? 150 : 110;
+  const N = 11; const R = 58;
+  let spiral = ''; const turns = flower ? 2.3 : 1.12;
+  for (let i = 0; i <= 90; i++) { const t = i / 90; const a = -1.9 + t * turns * Math.PI * 2; const r = flower ? 9 + t * 29 : 44 + t * 7 + Math.sin(t * 9) * 1.2; spiral += `${i ? 'L' : 'M'}${(Math.cos(a) * r).toFixed(1)} ${(Math.sin(a) * r).toFixed(1)}`; }
+  let petals = '';
+  for (let i = 0; i < N; i++) {
+    const a0 = (i / N) * Math.PI * 2; const a1 = ((i + 1) / N) * Math.PI * 2;
+    const p0 = [Math.cos(a0) * R * 0.78, Math.sin(a0) * R * 0.78]; const p1 = [Math.cos(a1) * R * 0.78, Math.sin(a1) * R * 0.78];
+    const m = [(Math.cos((a0 + a1) / 2)) * R * 1.12, (Math.sin((a0 + a1) / 2)) * R * 1.12];
+    petals += `${i ? '' : `M${p0[0].toFixed(1)} ${p0[1].toFixed(1)}`}Q${m[0].toFixed(1)} ${m[1].toFixed(1)} ${p1[0].toFixed(1)} ${p1[1].toFixed(1)}`;
+  }
+  const stroke = E > 0.85 ? 'url(#rb)' : '#ff4f6d';
+  el.style.cssText = `width:${size}px;height:${size}px;border:none;box-shadow:none;opacity:1;right:${flower ? 6 : 14}px;top:${E >= 0.45 ? 18 : 34}px`;
+  el.innerHTML = `<svg viewBox="-70 -70 140 140" width="100%" height="100%"><defs><linearGradient id="rb" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#ff4f6d"/><stop offset=".35" stop-color="#ffb000"/><stop offset=".65" stop-color="#3fdcb0"/><stop offset="1" stop-color="#3b6bff"/></linearGradient></defs>
+    <path class="sp" d="${spiral}" fill="none" stroke="${stroke}" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+    ${flower ? `<path class="pt" d="${petals}" fill="none" stroke="${stroke}" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>` : ''}</svg>`;
+  const paths = [...el.querySelectorAll('path')];
+  // getTotalLength may not exist everywhere; fall back so scoring never breaks.
+  paths.forEach((p) => { const L = p.getTotalLength ? p.getTotalLength() : 300; p.style.strokeDasharray = L; p.style.strokeDashoffset = S.reduced ? 0 : L; p.dataset.len = L; });
+  if (S.reduced) { setTimeout(() => { el.style.opacity = 0; }, 900); return; }
+  const drawDur = 260 + (flower ? 120 : 0);
+  const token = String(Number(el.dataset.token || 0) + 1); el.dataset.token = token;
+  const mine = () => el.dataset.token === token;
+  tween(drawDur, (k) => {
+    if (!mine()) return;
+    const a = Math.min(1, k * (flower ? 1.6 : 1));
+    paths[0].style.strokeDashoffset = paths[0].dataset.len * (1 - a);
+    if (paths[1]) paths[1].style.strokeDashoffset = paths[1].dataset.len * (1 - clamp((k - 0.4) / 0.6));
+    el.style.transform = `rotate(${-20 + 20 * k}deg) scale(${1.3 - 0.3 * k})`;
+  }, easeOutCubic).then(async () => {
+    if (!mine()) return;
+    if (E > 0.85) tween(900, (k) => { if (mine()) el.style.transform = `rotate(${k * 360}deg)`; }, easeOutQuint);
+    await wait(760);
+    await tween(200, (k) => { if (mine()) el.style.opacity = 1 - k; });
+  });
+}
+
 const MARKS = {
   stamp: (c) => `<circle class="sp" r="56" fill="none" stroke="${c}" stroke-width="8"/><circle class="sp" r="45" fill="none" stroke="${c}" stroke-width="2.8"/><text class="fl" y="9" text-anchor="middle" font-family="Dela Gothic One, sans-serif" font-size="24" fill="${c}" transform="rotate(-12)">せいかい</text><path class="fl" d="M-30 -30 l3 6 6 1 -4.5 4 1 6.5 -5.5 -3 -5.5 3 1 -6.5 -4.5 -4 6 -1z M30 26 l3 6 6 1 -4.5 4 1 6.5 -5.5 -3 -5.5 3 1 -6.5 -4.5 -4 6 -1z" fill="${c}"/>`,
   crown: (c) => `<path class="sp" d="M-50 30 L-58 -28 L-26 -2 L0 -46 L26 -2 L58 -28 L50 30 Z" fill="none" stroke="${c}" stroke-width="7" stroke-linejoin="round"/><path class="fl" d="M-50 30 L-58 -28 L-26 -2 L0 -46 L26 -2 L58 -28 L50 30 Z" fill="#ffd23f" opacity=".85"/><path class="sp" d="M-48 44 L48 44" stroke="${c}" stroke-width="7" stroke-linecap="round"/><circle class="fl" cx="0" cy="-46" r="7" fill="#ff4f6d"/><circle class="fl" cx="-58" cy="-28" r="6" fill="#3b6bff"/><circle class="fl" cx="58" cy="-28" r="6" fill="#3fdcb0"/><circle class="fl" cx="0" cy="12" r="9" fill="#ff7ab6"/>`,
@@ -665,9 +738,14 @@ function bindUI() {
     S.settingsOpen = true;
     $('#settings').hidden = false;
   });
-  $('#close-settings').addEventListener('click', () => {
+  $('#close-settings').addEventListener('click', async () => {
     S.settingsOpen = false;
     $('#settings').hidden = true;
+    const url = $('#data-url').value.trim();
+    if (url !== (store.settings().dataUrl || '')) {
+      store.updateSettings({ dataUrl: url });
+      await initSets();
+    }
   });
   $('#open-guide').addEventListener('click', () => openGuide(true));
   $('#start').addEventListener('click', () => {
@@ -757,6 +835,7 @@ async function init() {
   $('#volume').value = st.settings.volume * 100;
   $('#motion').value = (st.settings.motion ?? 1) * 100;
   $('#motion-val').textContent = `${Math.round((st.settings.motion ?? 1) * 100)}%`;
+  $('#data-url').value = st.settings.dataUrl || '';
   
   // Load sets
   await initSets();

@@ -2,6 +2,9 @@
 
 export class QuizEngine {
   constructor() {
+    // Base URL for question data. Same-origin 'questions/' is the fallback
+    // (local dev / bundled data); set an http(s) URL to load from the web.
+    this.base = 'questions/';
     this.sets = [];
     this.currentSet = null;
     this.currentQuestionIndex = 0;
@@ -17,8 +20,17 @@ export class QuizEngine {
     this.passScore = 0;
   }
 
+  setBase(url) {
+    if (!url) return;
+    this.base = url.endsWith('/') ? url : `${url}/`;
+  }
+
+  get dataSource() {
+    return this.base;
+  }
+
   async loadSets() {
-    const res = await fetch('questions/index.json');
+    const res = await fetch(`${this.base}index.json`);
     if (!res.ok) throw new Error('Failed to load question index');
     const index = await res.json();
     this.sets = index.sets;
@@ -26,7 +38,7 @@ export class QuizEngine {
   }
 
   async loadSet(setId) {
-    const res = await fetch(`questions/${setId}.json`);
+    const res = await fetch(`${this.base}${setId}.json`);
     if (!res.ok) throw new Error(`Failed to load set ${setId}`);
     this.currentSet = await res.json();
     this.currentQuestionIndex = 0;

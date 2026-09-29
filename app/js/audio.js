@@ -500,11 +500,19 @@ export class AudioEngine {
   unlock() {
     if (this.capture) return;
     if (!this.ctx) {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return;
-      this.ctx = new AC({ latencyHint: 'interactive' });
-      this.g = makeGraph(this.ctx);
-      this.g.master.gain.value = this.muted ? 0 : 0.72 * this.volume;
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        this.ctx = new AC({ latencyHint: 'interactive' });
+        this.g = makeGraph(this.ctx);
+        this.g.master.gain.value = this.muted ? 0 : 0.72 * this.volume;
+      } catch (e) {
+        // Audio unsupported here (e.g. no ConvolverNode): stay silent,
+        // every play() call already no-ops without ctx/g.
+        console.warn('audio unavailable', e);
+        this.ctx = null; this.g = null;
+        return;
+      }
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
   }
