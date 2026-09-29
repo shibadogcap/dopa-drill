@@ -72,8 +72,12 @@ jobs:
               print('already patched')
           EOF
 
+      # setup-android's default packages list includes the obsolete
+      # `tools` package (sdkmanager exits 1). Pin valid packages instead.
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools "platforms;android-35" "build-tools;35.0.0"
 
       # Signing is optional: when these secrets exist the APK is signed,
       # otherwise an unsigned release APK is built.
