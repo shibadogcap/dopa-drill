@@ -1192,24 +1192,37 @@ function bindUI() {
       location.reload();
     }
   });
+  // Every modal close restores the mascot (it shrinks to the dialog corner
+  // while a modal is open; without this it stays small on the screen behind).
+  const modalClosed = () => requestAnimationFrame(() => layoutActors());
   $('#bonus-ok').addEventListener('click', () => {
     S.bonusOpen = false;
     $('#bonus').hidden = true;
+    modalClosed();
   });
   $('#tg-ok').addEventListener('click', () => {
     S.trophyOpen = false;
     $('#trophy-got').hidden = true;
+    modalClosed();
   });
   $('#confirm-no').addEventListener('click', () => {
     S.confirm = false;
     $('#confirm').hidden = true;
+    modalClosed();
   });
   $('#confirm-yes').addEventListener('click', () => {
     S.confirm = false;
     $('#confirm').hidden = true;
+    modalClosed();
   });
   $('#close-day').addEventListener('click', () => {
     $('#day-log').hidden = true;
+    modalClosed();
+  });
+  $('#set-select-close').addEventListener('click', () => {
+    S.setSelectOpen = false;
+    $('#set-select').hidden = true;
+    modalClosed();
   });
   $('#cal-prev').addEventListener('click', () => {
     calCursor.m -= 1;
@@ -1255,12 +1268,46 @@ function bindUI() {
 addEventListener('resize', () => requestAnimationFrame(() => {
   layoutActors();
 }));
+addEventListener('pointermove', (e) => {
+  if (S.screen !== 'play' && !S.guideOpen && !heroBusy()) hero.lookAt({ x: e.clientX, y: e.clientY });
+});
+
+// Tapping the mascot always answers with an animation.
+function pokeHero() {
+  if (S.guideOpen || S.settingsOpen || S.bonusOpen) return;
+  if (heroBusy()) {
+    hero.setFace('happy', 'grin');
+    setTimeout(() => hero.resetFace(), 600);
+    return;
+  }
+  audio.unlock();
+  const roll = Math.random();
+  if (roll < 0.35) hero.hop(46, 420, { audio });
+  else if (roll < 0.6) hero.hop(70, 560, { spin: 360, audio });
+  else if (roll < 0.8) hero.celebrate(0.5, { variant: 'earflap', audio });
+  else hero.clap(3, audio);
+  S.busyUntil = performance.now() + 700;
+}
 
 // Keep the mascot glued to its anchor while scrollable screens move.
+// Never reposition mid-action: placing during a hop/arm job teleports it.
+// A delayed retry catches the idle moment right after.
 let scrollRaf = 0;
+let scrollRetry = 0;
+function heroBusy() {
+  return hero.lift !== 0 || hero.hands.some((h) => h.job);
+}
 function onScrollLayout() {
   if (scrollRaf) return;
-  scrollRaf = requestAnimationFrame(() => { scrollRaf = 0; layoutActors(true); });
+  scrollRaf = requestAnimationFrame(() => {
+    scrollRaf = 0;
+    if (heroBusy()) {
+      clearTimeout(scrollRetry);
+      scrollRetry = setTimeout(() => layoutActors(true), 600);
+      return;
+    }
+    layoutActors(true);
+  });
 }
 function watchScroll() {
   $$('.screen, .modal-card').forEach((el) => {
@@ -1280,6 +1327,9 @@ async function init() {
   startClock();
   bindUI();
   watchScroll();
+  hero.root.style.pointerEvents = 'auto';
+  hero.root.style.cursor = 'pointer';
+  hero.root.addEventListener('click', pokeHero);
   
   // Load settings
   const st = store.load();
@@ -1300,9 +1350,11 @@ async function init() {
   renderTrophyBadge();
   refreshResume();
   
-  // Check guide
+  // Check guide (its onClose shows the bonus); otherwise daily bonus now.
   if (!store.hasSeenGuide()) {
     setTimeout(() => openGuide(false), 500);
+  } else {
+    checkLoginBonus();
   }
   
   // Start render loop: clocks, shake/flash, backdrop, particles, actors.

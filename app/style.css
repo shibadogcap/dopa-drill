@@ -27,6 +27,9 @@ body {
   color: var(--ink);
   font-family: var(--round);
   font-weight: 700;
+  /* Dela Gothic One ships only 400: never synthesize a faux bold for it. */
+  font-synthesis-weight: none;
+  font-synthesis-style: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   user-select: none;
@@ -95,6 +98,8 @@ button:focus-visible { outline: 4px solid var(--yellow); outline-offset: 3px; }
 .logo-bits b:nth-child(2) { animation-delay: -.6s; }
 .logo-bits b:nth-child(3) { animation-delay: -1.2s; }
 .logo-bits b:nth-child(4) { animation-delay: -1.8s; }
+.logo-sub { margin: calc(var(--fs, 64px) * 0.05) 0 0; }
+.logo-sub span { display: inline-block; padding: 3px 14px; border: 2.5px solid var(--ink); border-radius: 999px; background: #fff; font-size: 13px; font-weight: 900; letter-spacing: .12em; box-shadow: 0 3px 0 var(--ink); }
 @keyframes logo-hop { 0%, 100% { transform: rotate(var(--r)) translateY(var(--dy, 0)) scale(1); } 12% { transform: rotate(var(--r)) translateY(calc(var(--dy, 0px) + 4px)) scale(1.08, .9); } 30% { transform: rotate(calc(var(--r) * -0.4)) translateY(calc(var(--dy, 0px) - 10px)) scale(.96, 1.06); } 55% { transform: rotate(var(--r)) translateY(var(--dy, 0)) scale(1); } }
 @keyframes logo-wave { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
 @keyframes logo-float { 0%, 100% { margin-top: 0; } 50% { margin-top: -8px; } }
