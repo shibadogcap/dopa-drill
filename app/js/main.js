@@ -12,6 +12,7 @@ import * as growth from './growth.js';
 import * as qs from './quests.js';
 import * as tr from './trophies.js';
 import * as ul from './unlocks.js';
+import { fmtDopa } from './scoring.js';
 import { QuizEngine } from './quiz.js';
 
 const $ = (s) => document.querySelector(s);
@@ -820,6 +821,10 @@ function bindUI() {
   });
 }
 
+addEventListener('resize', () => requestAnimationFrame(() => {
+  layoutActors();
+}));
+
 // ---------------------------------------------------------------- init
 async function init() {
   // Dev-only annotation toolbar (never bundled into production builds).
@@ -849,14 +854,83 @@ async function init() {
     setTimeout(() => openGuide(false), 500);
   }
   
-  // Start render loop
+  // Start render loop: clocks, shake/flash, backdrop, particles, actors.
   onFrame((dt, t) => {
+    audio.update();
     tickCombo(t);
-    // Update clock
+    const pulse = audio.pulse();
+    const targetKick = audio.playing ? pulse.kick * (S.level >= 1 ? 1 : 0.2) : 0;
+    S.kick = S.reduced ? 0 : targetKick;
+    body.style.setProperty('--kick', S.kick.toFixed(3));
+
+    // Dopa counter rolls up.
+    const d = S.dopa;
+    if (d.shown < d.L) {
+      d.shown = Math.min(d.L, d.shown + Math.max(0.02, (d.L - d.shown) * Math.min(1, dt * 7)));
+      $('#dopa').textContent = fmtDopa(d.shown);
+    }
+
+    // Quiz countdown clock.
     if (S.screen === 'play' && S.currentSet) {
       const remaining = quiz.getRemainingTime();
       $('#clock').textContent = fmtTime(remaining * 1000);
-      if (remaining < 60) $('.clock').classList.add('hurry');
+      $('.clock').classList.toggle('hurry', remaining < 60);
+    }
+
+    // Hero wanders around the stage between actions.
+    if (S.screen === 'play' && !S.reduced && S.motion >= 0.35 && S.E > 0.3
+        && t > S.idleAt && t > S.busyUntil && !hero.hands.some((h) => h.job)) {
+      S.idleAt = t + rand(2200, 4200) / (0.6 + S.E);
+      const r = stage.getBoundingClientRect();
+      const x = clamp(r.left + r.width / 2 + rand(-0.28, 0.28) * r.width, r.left + 50, r.right - 50);
+      hero.hop(20 + 40 * S.E, 420, { to: { x, y: hero.home.y }, spin: S.E > 0.6 && chance(0.3) ? 360 : 0 })
+        .then((ok) => { if (ok) hero.x = x; });
+    }
+
+    // Screen shake (keypad stays still to keep tap targets stable).
+    S.shake = Math.max(0, S.shake - dt * 30);
+    const shk = S.shake * S.motion;
+    const sx = shk > 0.1 && !S.reduced ? rand(-shk, shk) : 0;
+    const sy = shk > 0.1 && !S.reduced ? rand(-shk, shk) : 0;
+    stage.style.translate = shk > 0.1 ? `${sx}px ${sy}px` : '';
+    $('.hud').style.translate = shk > 0.1 ? `${sx * 0.5}px ${sy * 0.5}px` : '';
+    S.flash = Math.max(0, S.flash - dt * 3.2);
+    $('#flash').style.opacity = S.reduced ? 0 : ((S.flash * S.motion) ** 1.5 * 0.6).toFixed(3);
+
+    // Backdrop follows the excitement level.
+    const vE = S.screen === 'title' ? 0.04 : lerp(Math.min(S.E, 0.3), S.E, S.motion);
+    S.visualE = lerp(S.visualE, vE, Math.min(1, dt * 2.2));
+    const st = bg.state;
+    st.E = S.visualE;
+    st.kick = S.kick;
+    st.flash = S.reduced ? 0 : S.flash * S.motion;
+    const hc = hero.headCenter;
+    st.cx = lerp(st.cx || hc.x, S.screen === 'play' ? stage.getBoundingClientRect().left + stage.clientWidth / 2 : innerWidth / 2, Math.min(1, dt * 3));
+    st.cy = lerp(st.cy || hc.y, S.screen === 'play' ? stage.getBoundingClientRect().top + stage.clientHeight * 0.55 : innerHeight * 0.4, Math.min(1, dt * 3));
+    bg.render(t);
+    fx.update(dt);
+    fx.draw();
+    fxBack.update(dt);
+    fxBack.draw();
+    const ctx = { beat: S.kick };
+    for (const a of actors) {
+      if (a === hero && S.guideOpen && S.reduced) a.update(0, 0);
+      else a.update(dt, t, ctx);
+    }
+  });
+
+  // Title screen idle performance.
+  onFrame((dt, t) => {
+    if (S.screen !== 'title' || S.guideOpen || S.reduced || S.settingsOpen || S.confirm || S.bonusOpen || S.trophyOpen) return;
+    if (t > S.idleAt && t > S.busyUntil) {
+      S.idleAt = t + rand(1600, 2800);
+      const r = $('#title-stage').getBoundingClientRect();
+      const x = r.left + r.width / 2 + rand(-0.25, 0.25) * r.width;
+      const roll = Math.random();
+      if (roll < 0.35) hero.hop(40, 420, { to: { x, y: hero.home.y } }).then((ok) => { if (ok) hero.x = x; });
+      else if (roll < 0.55) hero.hop(70, 560, { spin: 360 });
+      else if (roll < 0.75) hero.celebrate(0.4, { variant: 'earflap' });
+      else hero.clap(3);
     }
   });
   
