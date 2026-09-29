@@ -73,6 +73,7 @@ function showScreen(name) {
   S.screen = name;
   if (name === 'title') {
     try { refreshLook(); } catch { /* look modules optional */ }
+    try { refreshResume(); } catch { /* storage optional */ }
     setTimeout(flushPendingBonus, 600);
   }
   $$('.screen').forEach((s) => s.classList.toggle('is-active', s.id === `screen-${name}`));
@@ -152,7 +153,53 @@ function renderSetList() {
   });
 }
 
+// ---------------------------------------------------------------- interrupted runs
+const RUN_KEY = 'dopa-drill:run';
+function saveRun() {
+  try {
+    const snap = quiz.snapshot();
+    if (snap && snap.index < snap.set.questions.length) localStorage.setItem(RUN_KEY, JSON.stringify(snap));
+  } catch { /* storage unavailable or run finished */ }
+}
+function loadRun() {
+  try {
+    const raw = localStorage.getItem(RUN_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function clearRun() {
+  try { localStorage.removeItem(RUN_KEY); } catch { /* ignore */ }
+}
+function refreshResume() {
+  const snap = loadRun();
+  const btn = $('#resume');
+  if (snap && snap.set && (snap.index | 0) < (snap.set.questions || []).length) {
+    btn.hidden = false;
+    $('#resume-info').textContent = `${snap.set.title || ''} ${snap.index + 1}問目〜`;
+  } else {
+    btn.hidden = true;
+    if (snap) clearRun();
+  }
+}
+async function resumeRun() {
+  const snap = loadRun();
+  if (!snap) return;
+  try {
+    quiz.restore(snap);
+    clearRun();
+    enterPlay(false);
+  } catch (err) {
+    console.error('resume failed:', err);
+    clearRun();
+    refreshResume();
+  }
+}
+
 function openSetSelect() {
+  if (S.guideOpen) {
+    S.guideOpen = false;
+    guide.close();
+  }
   if (!$('#bonus').hidden) { $('#bonus').hidden = true; S.bonusOpen = false; }
   if (!S.sets.length) {
     $('#set-select-list').innerHTML = `<li><p class="hint">${S.setsError || '問題データがありません。URLかファイルで追加してください'}</p></li>`;
@@ -186,16 +233,16 @@ async function importFile(file) {
 // ---------------------------------------------------------------- quiz flow
 async function startQuiz(setId) {
   audio.unlock();
-  S.run += 1;
   if (S.bonusOpen) { $('#bonus').hidden = true; S.bonusOpen = false; }
-  
+
   try {
     S.currentSet = await quiz.loadSet(setId);
   } catch (err) {
     console.error('Failed to load set:', err);
     return;
   }
-  
+
+  clearRun();
   S.selectedSetId = setId;
   S.questionIndex = 0;
   S.solved = 0;
@@ -203,6 +250,20 @@ async function startQuiz(setId) {
   S.combo = 0;
   S.comboPeak = 0;
   S.dopa = { L: 0, shown: 0, unit: '' };
+  enterPlay();
+}
+
+function enterPlay(countPlay = true) {
+  S.run += 1;
+  audio.unlock();
+  S.selectedSetId = S.currentSet.id;
+  S.questionIndex = quiz.currentQuestionIndex;
+  S.solved = quiz.correctCount;
+  S.misses = quiz.wrongCount;
+  S.combo = 0;
+  S.comboPeak = quiz.maxCombo;
+  S.dopa = { L: 0, shown: 0, unit: '' };
+  $('#dopa').textContent = '0';
   S.targetMs = S.currentSet.timeLimit * 1000;
   $('#clock-label').textContent = `目標 ${fmtTime(S.targetMs)}`;
   $('.clock').classList.remove('over', 'extra', 'hurry');
@@ -226,7 +287,7 @@ async function startQuiz(setId) {
   audio.key = 0;
   audio.startMusic();
   audio.jingle();
-  questNote({ type: 'play' });
+  if (countPlay) questNote({ type: 'play' });
   showScreen('play');
   S.startT = now();
   setupQuestion();
@@ -519,7 +580,8 @@ function showCombo() {
 
 function comboGrade() { return 3; }
 function armCombo(first) {
-  S.comboLimit = comboWindowMs(comboGrade(), first);
+  // Choice questions need reading time: generous windows (15s first, 10s after).
+  S.comboLimit = first ? 15000 : 10000;
   S.comboEnd = now() + S.comboLimit;
 }
 function comboWindowMs(grade, first) { return 8000; }
@@ -552,7 +614,8 @@ function bumpDopa() {
 }
 
 // ---------------------------------------------------------------- results
-async function showResults() {
+async function showResults({ finish = true } = {}) {
+  if (finish) clearRun();
   const results = quiz.getResults();
   $('#result-title').textContent = S.currentSet.title;
   $('#r-score').textContent = results.score;
@@ -1110,17 +1173,18 @@ function bindUI() {
     quiz.resume();
     audio.startMusic();
   });
-  $('#pause-retire').addEventListener('click', () => {
+  $('#pause-retire').addEventListener('click', async () => {
     $('#pause-menu').hidden = true;
     S.paused = false;
     S.explaining = false;
     clearTimeout(S.explainTimer);
-    S.currentSet = null;
+    card.classList.remove('explaining');
+    // Grade the run so far, but keep the snapshot for つづきから.
+    saveRun();
     audio.stopMusic();
-    showScreen('title');
-    renderQuests();
-    renderCalendar();
+    await showResults({ finish: false });
   });
+  $('#resume').addEventListener('click', () => resumeRun());
   $('#reset-data').addEventListener('click', () => {
     if (confirm('すべてのデータをリセットしますか？')) {
       store.reset();
@@ -1217,6 +1281,7 @@ async function init() {
   renderQuests();
   renderCalendar();
   renderTrophyBadge();
+  refreshResume();
   
   // Check guide
   if (!store.hasSeenGuide()) {

@@ -178,4 +178,49 @@ export class QuizEngine {
     const elapsed = Math.floor((now - this.startTime) / 1000);
     return Math.max(0, this.timeLimit - elapsed);
   }
+
+  elapsedSec() {
+    const now = this.paused ? this.pauseStart : Date.now();
+    return Math.max(0, Math.floor((now - this.startTime) / 1000));
+  }
+
+  // Snapshot for interrupted runs (retire / relaunch). The full set is
+  // embedded so resume works offline and for imported bundles.
+  snapshot() {
+    if (!this.currentSet) return null;
+    return {
+      v: 1,
+      set: this.currentSet,
+      index: this.currentQuestionIndex,
+      answers: this.answers,
+      score: this.score,
+      correct: this.correctCount,
+      wrong: this.wrongCount,
+      maxCombo: this.maxCombo,
+      elapsed: this.elapsedSec(),
+      timeLimit: this.timeLimit,
+      passScore: this.passScore,
+      at: Date.now(),
+    };
+  }
+
+  restore(snap) {
+    if (!snap || snap.v !== 1 || !snap.set || !Array.isArray(snap.set.questions)) {
+      throw new Error('bad snapshot');
+    }
+    const set = this.addBundle(snap.set, snap.set.title || '');
+    this.currentSet = set;
+    this.currentQuestionIndex = Math.min(snap.index | 0, set.questions.length);
+    this.answers = Array.isArray(snap.answers) ? snap.answers : [];
+    this.score = snap.score | 0;
+    this.correctCount = snap.correct | 0;
+    this.wrongCount = snap.wrong | 0;
+    this.maxCombo = snap.maxCombo | 0;
+    this.timeLimit = snap.timeLimit | 0;
+    this.passScore = snap.passScore | 0;
+    this.startTime = Date.now() - (snap.elapsed | 0) * 1000;
+    this.paused = false;
+    this.pauseStart = 0;
+    return set;
+  }
 }
