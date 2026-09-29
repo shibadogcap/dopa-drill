@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "scrape": "node tools/scrape.mjs"
+    "scrape": "node tools/scrape.mjs",
+    "sync:questions": "mkdir -p app/public/questions && cp questions/*.json app/public/questions/ 2>/dev/null || echo 'no question data, skipping'",
+    "predev": "pnpm sync:questions",
+    "prebuild": "pnpm sync:questions"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

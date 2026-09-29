@@ -4,6 +4,7 @@ android/
 tools/
 questions/*.json
 !questions/schema.json
+app/public/questions/
 *.apk
 *.aab
 *.keystore
