@@ -1,6 +1,6 @@
 // Title tour: captions belong to the interface, never to the mascot.
-const INTRO = { title: 'あそびかた', text: '本免問題に チャレンジ！\n90問 解いて 85点で 合格' };
-const SETS = { target: '#set-list', title: '問題セット', text: '10セットから えらんで\nスタート！' };
+const INTRO = { title: 'あそびかた', text: '選択問題に チャレンジ！\n正しいと 思う方を タップ' };
+const SETS = { target: '#start', title: '問題セット', text: 'ボタンを押すと\nセットの一覧が 出るよ' };
 const TROPHY = { target: '#open-trophy', title: 'トロフィー', text: 'あそぶと もらえるよ。\nつづけて あそぶと ふえていく' };
 const COLLECTION = { target: '#open-collect', title: 'コレクション', text: 'トロフィーの ごほうびで ふえる\nはいけい・おんがく・きせかえなどを\nえらべるよ' };
 const LAST = { target: '#start', title: 'まずは 1セット！', text: 'この せつめいは\n？ で また みられるよ', recommend: true };

@@ -71,6 +71,10 @@ function setLevelClasses(L) {
 
 function showScreen(name) {
   S.screen = name;
+  if (name === 'title') {
+    try { refreshLook(); } catch { /* look modules optional */ }
+    setTimeout(flushPendingBonus, 600);
+  }
   $$('.screen').forEach((s) => s.classList.toggle('is-active', s.id === `screen-${name}`));
   const el = $(`#screen-${name}`);
   if (!S.reduced) tween(260, (k) => { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 18}px)`; }).then(() => { el.style.transform = ''; });
@@ -124,21 +128,59 @@ async function initSets() {
     renderSetList();
   } catch (err) {
     console.error('Failed to load sets:', err);
-    const from = quiz.dataSource;
-    $('#set-list').innerHTML = `<p class="hint">問題データを読み込めませんでした（${from}）<br>せっていで問題データのURLを確認してください</p>`;
+    S.sets = [];
+    S.setsError = `問題データを読み込めませんでした（${quiz.dataSource}）。せっていのURLかファイル追加を確認してください`;
   }
 }
 
 function renderSetList() {
-  const container = $('#set-list');
-  container.innerHTML = '';
-  S.sets.forEach((set, i) => {
+  const list = $('#set-select-list');
+  list.innerHTML = '';
+  S.sets.forEach((set) => {
+    const li = document.createElement('li');
     const btn = document.createElement('button');
-    btn.dataset.set = set.id;
-    btn.innerHTML = `${i + 1}<small>セット</small>`;
-    btn.addEventListener('click', () => startQuiz(set.id));
-    container.appendChild(btn);
+    if (set.imported) btn.className = 'imported';
+    const count = set.questionCount ?? quiz.bundles[set.id]?.questions.length ?? '?';
+    btn.innerHTML = `${set.title}<small>${count}問・${set.passScore ?? 85}点合格${set.imported ? '・取込分' : ''}</small>`;
+    btn.addEventListener('click', () => {
+      $('#set-select').hidden = true;
+      S.setSelectOpen = false;
+      startQuiz(set.id);
+    });
+    li.appendChild(btn);
+    list.appendChild(li);
   });
+}
+
+function openSetSelect() {
+  if (!$('#bonus').hidden) { $('#bonus').hidden = true; S.bonusOpen = false; }
+  if (!S.sets.length) {
+    $('#set-select-list').innerHTML = `<li><p class="hint">${S.setsError || '問題データがありません。URLかファイルで追加してください'}</p></li>`;
+  } else renderSetList();
+  S.setSelectOpen = true;
+  $('#set-select').hidden = false;
+}
+
+async function importFile(file) {
+  const note = $('#import-note');
+  try {
+    const data = JSON.parse(await file.text());
+    const raws = Array.isArray(data) ? data : data.sets || [data];
+    let added = 0;
+    for (const raw of raws) {
+      try {
+        const set = quiz.addBundle(raw, file.name.replace(/\.json$/i, ''));
+        if (!S.sets.some((s) => s.id === set.id)) {
+          S.sets.push({ id: set.id, title: set.title, passScore: set.passScore, timeLimit: set.timeLimit, questionCount: set.questions.length, imported: true });
+          added += 1;
+        }
+      } catch { /* skip invalid entries */ }
+    }
+    note.textContent = added ? `${added}セット追加しました` : '追加できるセットがありませんでした';
+    renderSetList();
+  } catch {
+    note.textContent = 'JSONを読み込めませんでした';
+  }
 }
 
 // ---------------------------------------------------------------- quiz flow
@@ -180,9 +222,11 @@ async function startQuiz(setId) {
     }
   }
   updateTally();
+  try { refreshLook(); } catch { /* look modules optional */ }
   audio.key = 0;
   audio.startMusic();
   audio.jingle();
+  questNote({ type: 'play' });
   showScreen('play');
   S.startT = now();
   setupQuestion();
@@ -195,6 +239,9 @@ function updateTally() {
 
 async function setupQuestion() {
   S.ready = false;
+  clearTimeout(S.explainTimer);
+  S.explaining = false;
+  card.classList.remove('explaining');
   const q = quiz.getCurrentQuestion();
   if (!q) {
     await showResults();
@@ -246,7 +293,10 @@ async function setupQuestion() {
   
   const E = basicE(S.questionIndex);
   applyLevel(E);
+  const last = S.questionIndex === S.currentSet.questions.length - 1;
   const run = S.run;
+  if (last) cutin('ラスト1問', E);
+  else if (E > 0.22) cutin(`第${S.questionIndex + 1}問`, E);
   await cardEnter(E);
   if (S.screen !== 'play' || run !== S.run) return;
   S.ready = true;
@@ -294,7 +344,7 @@ function pressVisual(btn) {
 }
 
 function answerQuestion(answerIndex) {
-  if (S.screen !== 'play' || !S.ready) return;
+  if (S.screen !== 'play' || !S.ready || S.paused) return;
   const btn = $$(`#pad button`)[answerIndex];
   pressVisual(btn);
   S.ready = false;
@@ -319,27 +369,39 @@ function applyAnswer(answerIndex) {
     S.firstTry += 1;
     addCombo();
     bumpDopa();
+    questNote({ type: 'solve', firstTry: true });
     onCorrect();
   } else {
     S.misses += 1;
     S.wrongInQ = true;
     breakCombo();
+    questNote({ type: 'solve', firstTry: false });
     onWrong();
   }
   updateTally();
   showExplanation(result);
-  setTimeout(async () => {
-    if (S.screen !== 'play') return;
-    await wait(1400);
-    if (S.screen !== 'play') return;
-    quiz.nextQuestion();
-    S.questionIndex++;
-    if (quiz.isFinished()) {
-      await showResults();
-    } else {
-      setupQuestion();
-    }
-  }, 1400);
+  // Tapping the card during the explanation jumps ahead immediately.
+  clearTimeout(S.explainTimer);
+  S.explaining = true;
+  card.classList.add('explaining');
+  $$('#pad button').forEach((b) => { b.disabled = true; });
+  S.explainTimer = setTimeout(() => advance(), 2600);
+}
+
+async function advance() {
+  if (!S.explaining) return;
+  clearTimeout(S.explainTimer);
+  S.explaining = false;
+  card.classList.remove('explaining');
+  $$('#pad button').forEach((b) => { b.disabled = false; });
+  if (S.screen !== 'play') return;
+  quiz.nextQuestion();
+  S.questionIndex++;
+  if (quiz.isFinished()) {
+    await showResults();
+  } else {
+    setupQuestion();
+  }
 }
 
 // The explanation panel always shows after answering, right or wrong.
@@ -418,6 +480,7 @@ function onWrong() {
 function addCombo() {
   S.combo += 1;
   S.comboPeak = Math.max(S.comboPeak || 0, S.combo);
+  questNote({ type: 'combo', value: S.combo });
   showCombo();
   if (S.combo < 2) return;
   const box = $('#combo-box');
@@ -519,19 +582,186 @@ async function showResults() {
   
   // Check trophies
   checkTrophies(results);
-  
+  renderQuestMini($('#r-quests'));
+
   showScreen('result');
   audio.clear(S.E);
   celebrate(S.E, true, true);
 }
 
+// ---------------------------------------------------------------- daily quests
+function questCtx() {
+  return { count: 90, review: 0, placed: true, hasNew: false, hasLearning: false, extraOk: false, avgCells: 2, rusty: [], polishWeek: 0, now: Date.now() };
+}
+const quests = () => {
+  const st = store.load();
+  if (!st.quests) st.quests = {};
+  if (qs.ensureDay(st.quests, store.dayKey(), questCtx())) store.save();
+  return st.quests;
+};
+function questNote(ev) {
+  const q = quests();
+  const done = qs.questEvent(q, ev);
+  done.forEach((d, i) => setTimeout(() => questPop(d), i * 700));
+  if (done.length && qs.claimReward(q)) {
+    S.dopa.L += 0.3;
+    setTimeout(() => questPop(null), done.length * 700 + 200);
+  }
+  if (done.length) { store.save(); renderQuests(); }
+}
+const CHECK_SVG = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5 L8.5 15 L16 5" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function questRows(list) {
+  return list.map((q) => {
+    const k = Math.min(1, q.prog / q.goal);
+    return `<li class="${q.done ? 'done' : ''}"><i class="qchk">${q.done ? CHECK_SVG : ''}</i><span class="qt">${qs.questText(q)}</span><span class="qp">${Math.min(q.prog, q.goal)}/${q.goal}</span><i class="qbar" style="--p:${k.toFixed(3)}"></i></li>`;
+  }).join('');
+}
+function questRewardText(q) {
+  if (q.rewarded) return '<b class="qdone">コンプリート！</b>';
+  return 'ぜんぶで ドパ+ボーナス';
+}
+function renderQuests() {
+  const q = quests();
+  $('#quest-list').innerHTML = questRows(q.list);
+  $('#quest-reward').innerHTML = questRewardText(q);
+  $('#quests').classList.toggle('complete', !!q.rewarded);
+}
+function renderQuestMini(el) {
+  const q = quests();
+  el.innerHTML = `<p class="qm-head">きょうの クエスト <span>${questRewardText(q)}</span></p><ol class="quest-list">${questRows(q.list)}</ol>`;
+}
+function questPop(q) {
+  audio.play('coin', audio.now(), { v: 0.12, m: 88 });
+  const el = document.createElement('div');
+  el.className = `quest-pop${q ? '' : ' all'}`;
+  el.innerHTML = q ? `<b>クエスト クリア！</b><span>${qs.questText(q)}</span>` : '<b>クエスト コンプリート！</b>';
+  $('#cutins').appendChild(el);
+  const y = Math.max(8, $('#app').getBoundingClientRect().top + 6);
+  el.style.top = `${y}px`;
+  (async () => {
+    if (!S.reduced) await tween(260, (k) => { el.style.transform = `translate(-50%, ${(1 - k) * -60}px) scale(${0.8 + 0.2 * k})`; el.style.opacity = k; }, easeOutBack);
+    else { el.style.transform = 'translate(-50%, 0)'; el.style.opacity = 1; }
+    await wait(1500);
+    await tween(220, (k) => { el.style.opacity = 1 - k; });
+    el.remove();
+  })();
+}
+
 // ---------------------------------------------------------------- trophies
+const gotTrophies = () => store.load().trophies || [];
+const gotMap = () => Object.fromEntries(gotTrophies().map((id) => [id, true]));
+
+// ---------------------------------------------------------------- collection & look
+const equipState = () => {
+  const st = store.load();
+  if (!st.equip) st.equip = ul.defaultEquip();
+  return st.equip;
+};
+
+function applyLook(look) {
+  const v = (c) => ul.variant(look[c]);
+  try { bg.setTheme(v('bg')); } catch { /* theme unknown, keep current */ }
+  const pt = v('particle');
+  fx.theme = fxBack.theme = pt === 'classic' ? null : pt;
+  try { audio.setSong(v('music')); } catch { /* keep current song */ }
+  try { hero.setPalette(v('color')); } catch { /* keep palette */ }
+  try { hero.setCostume(v('costume') === 'none' ? null : v('costume')); } catch { /* keep costume */ }
+  while (crowd.length) { const m = crowd.pop(); m.destroy(); actors.splice(actors.indexOf(m), 1); }
+}
+
+function refreshLook() {
+  applyLook(ul.pickLook(equipState(), gotMap(), S.rng || Math.random));
+}
+
+let collectCat = 'bg';
+function renderCollect() {
+  const got = gotMap();
+  const tabs = $('#co-tabs');
+  tabs.innerHTML = '';
+  ul.CATS.forEach(({ key, name }) => {
+    const b = document.createElement('button');
+    b.textContent = name;
+    b.setAttribute('aria-pressed', key === collectCat);
+    b.addEventListener('click', () => { collectCat = key; renderCollect(); });
+    tabs.appendChild(b);
+  });
+  const eq = equipState();
+  const items = ul.unlockedIn(collectCat, got);
+  const catName = ul.CATS.find((c) => c.key === collectCat)?.name || '';
+  $('#co-note').textContent = items.length ? `${catName}（タップで きせかえ）` : 'まだないよ。トロフィーを ゲットしよう！';
+  const grid = $('#co-grid');
+  grid.innerHTML = '';
+  items.forEach((it) => {
+    const b = document.createElement('button');
+    b.className = `co-item${eq[collectCat] === it.id || (eq[collectCat] === 'auto' && it.base) ? ' got' : ''}`;
+    b.textContent = it.name;
+    b.addEventListener('click', () => {
+      equipState()[collectCat] = it.id;
+      store.save();
+      refreshLook();
+      renderCollect();
+    });
+    grid.appendChild(b);
+  });
+  const n = gotTrophies().length;
+  const cc = $('#collect-count');
+  if (cc) cc.textContent = `${n}トロフィー`;
+  const badge = $('#collect-badge');
+  if (badge) badge.textContent = '';
+}
+
 function checkTrophies(results) {
   const st = store.load();
-  const got = tr.checkTrophies(st, results);
-  if (got.length > 0) {
-    setTimeout(() => showTrophyGot(got), 1000);
+  if (!st.stats) st.stats = {};
+  const s = st.stats;
+  s.questions = (s.questions || 0) + results.total;
+  if (results.wrong === 0) s.perfects = (s.perfects || 0) + 1;
+  s.maxCombo = Math.max(s.maxCombo || 0, results.maxCombo);
+  s.bestScore = Math.max(s.bestScore || 0, results.score);
+  s.days = store.playedDays().size;
+  try { s.bestStreak = store.bestStreak(); } catch { /* older saves */ }
+  const fresh = tr.checkTrophies(st, results).filter((t) => !(st.trophies || []).includes(t.id));
+  if (!st.trophies) st.trophies = [];
+  fresh.forEach((t) => st.trophies.push(t.id));
+  store.save();
+  renderTrophyBadge();
+  if (fresh.length > 0) {
+    setTimeout(() => showTrophyGot(fresh), 1000);
   }
+}
+
+function renderTrophyBadge() {
+  const n = gotTrophies().length;
+  const b = $('#trophy-badge');
+  if (b) b.textContent = n ? `${n}` : '';
+  const c = $('#trophy-count');
+  if (c) c.textContent = `${n}/${tr.TROPHIES.length}`;
+}
+
+let trophyFilter = 'all';
+function renderTrophyList() {
+  const got = new Set(gotTrophies());
+  const list = $('#tr-list');
+  const items = tr.TROPHIES.filter((t) => {
+    if (trophyFilter === 'got') return got.has(t.id);
+    if (trophyFilter === 'next' || trophyFilter === 'soon') return !got.has(t.id);
+    return true;
+  });
+  if (!items.length) {
+    list.innerHTML = '<p class="tr-empty">まだないよ。あそんで ゲットしよう！</p>';
+    return;
+  }
+  const cats = [...new Set(items.map((t) => t.cat))];
+  list.innerHTML = cats.map((c) => {
+    const ts = items.filter((t) => t.cat === c);
+    const rows = ts.map((t) => {
+      const state = got.has(t.id) ? ' done' : '';
+      const sub = got.has(t.id) ? 'ゲットずみ！' : t.desc;
+      return `<div class="tr-series"><div style="display:grid;grid-template-columns:40px 1fr;gap:10px;align-items:center;padding:7px 12px 8px 7px;"><span class="tr-icon">${t.icon}</span><span class="tr-t"><b>${t.name}</b><span class="tr-next${state}">${sub}</span></span></div></div>`;
+    }).join('');
+    return `<h3 class="tr-cat">${c}</h3>${rows}`;
+  }).join('');
+  renderTrophyBadge();
 }
 
 function showTrophyGot(trophies) {
@@ -542,6 +772,14 @@ function showTrophyGot(trophies) {
 }
 
 // ---------------------------------------------------------------- calendar & quests
+const MODAL_IDS = ['#settings', '#set-select', '#pause-menu', '#confirm', '#day-log', '#trophy-got', '#bonus'];
+function anyModalOpen() {
+  return MODAL_IDS.some((id) => {
+    const el = $(id);
+    return el && !el.hidden;
+  });
+}
+
 function checkLoginBonus() {
   const st = store.load();
   const today = store.dayKey();
@@ -549,7 +787,16 @@ function checkLoginBonus() {
     st.lastLogin = today;
     st.loginStreak = (st.loginStreak || 0) + 1;
     store.save();
-    showBonus(st.loginStreak);
+  }
+  // Never stack over another modal; show when the title is clear.
+  if (anyModalOpen()) { S.pendingBonus = true; return; }
+  showBonus(st.loginStreak || 1);
+}
+
+function flushPendingBonus() {
+  if (S.pendingBonus && S.screen === 'title' && !anyModalOpen()) {
+    S.pendingBonus = false;
+    showBonus(store.load().loginStreak || 1);
   }
 }
 
@@ -566,6 +813,50 @@ function showBonus(streak) {
   }
   $('#bonus-note').textContent = streak >= 7 ? 'コンプリート！' : `あと${7 - streak}日でコンプリート`;
   $('#bonus').hidden = false;
+}
+
+// ---------------------------------------------------------------- calendar
+let calCursor = null;
+function renderCalendar() {
+  const today = new Date();
+  if (!calCursor) calCursor = { y: today.getFullYear(), m: today.getMonth() };
+  const { y, m } = calCursor;
+  const first = new Date(y, m, 1);
+  $('#cal-title').textContent = `${y}年${m + 1}月`;
+  $('#cal-prev').disabled = false;
+  $('#cal-next').disabled = y > today.getFullYear() || (y === today.getFullYear() && m >= today.getMonth());
+  let stk = 0, best = 0;
+  try { stk = store.streak(); best = store.bestStreak(); } catch { /* older saves */ }
+  $('#cal-badges').innerHTML =
+    `<span class="cal-badge stk">れんぞく <b>${stk}</b>日</span>` +
+    `<span class="cal-badge best">さいちょう <b>${best}</b>日</span>`;
+  const summary = store.monthSummary(y, m);
+  const grid = $('#cal-grid');
+  grid.innerHTML = '';
+  const blanks = first.getDay();
+  for (let i = 0; i < blanks; i++) {
+    const s = document.createElement('span');
+    s.className = 'cal-day blank';
+    grid.appendChild(s);
+  }
+  const days = new Date(y, m + 1, 0).getDate();
+  const todayKey = store.dayKey();
+  for (let d = 1; d <= days; d++) {
+    const key = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const b = document.createElement('button');
+    b.className = 'cal-day' + (key === todayKey ? ' today' : '') + (summary[key] ? ' played' : '');
+    b.innerHTML = `<span class="n">${d}</span>${summary[key] ? `<span class="sc">${summary[key].best}点</span>` : ''}`;
+    if (summary[key]) {
+      b.addEventListener('click', () => {
+        const list = $('#day-list');
+        list.innerHTML = summary[key].entries.slice(-8).reverse().map((h) =>
+          `<li><span class="t">${new Date(h.at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}</span><span class="m">${h.setId || ''}</span><span class="s">${h.score}点</span><span class="d">正解 ${h.correct}/${h.total}・${h.passed ? '合格' : '不合格'}</span></li>`).join('');
+        $('#day-title').textContent = `${m + 1}月${d}日の きろく`;
+        $('#day-log').hidden = false;
+      });
+    }
+    grid.appendChild(b);
+  }
 }
 
 // ---------------------------------------------------------------- crowd & parade
@@ -658,6 +949,27 @@ function celebrate(E, big, lastBasic) {
   tween(260, (k) => { card.style.transform = `scale(${1 + Math.sin(k * Math.PI) * 0.04 * E})`; }).then(() => { card.style.transform = ''; });
 }
 
+function cutin(text, E) {
+  if (S.reduced) return;
+  audio.cutin();
+  const r = stage.getBoundingClientRect();
+  const band = document.createElement('div');
+  band.className = 'cutin-band';
+  const h = 58 + 26 * Math.min(1, E);
+  const palettes = [['#3b6bff', '#5b8cff'], ['#ff7ab6', '#ff9ccc'], ['#ffb000', '#ffd23f'], ['#1b1d4d', '#3b3f8f']];
+  const pal = palettes[Math.min(3, Math.floor(E * 3.6))];
+  band.style.cssText = `top:${r.top + r.height / 2 - h / 2}px;height:${h}px;--c1:${pal[0]};--c2:${pal[1]}`;
+  band.innerHTML = `<div class="band-bg"></div><div class="band-text" style="font-size:${34 + 16 * Math.min(1, E)}px">${text}</div>`;
+  $('#cutins').appendChild(band);
+  const rot = -6;
+  (async () => {
+    await tween(240, (k) => { band.style.transform = `translateX(${(1 - k) * 110}%) rotate(${rot}deg) scaleY(${0.6 + 0.4 * k})`; }, easeOutBack);
+    await wait(360 + 160 * E);
+    await tween(200, (k) => { band.style.transform = `translateX(${-k * 110}%) rotate(${rot}deg)`; }, easeInCubic);
+    band.remove();
+  })();
+}
+
 // ---------------------------------------------------------------- unlockable show
 // Hand-drawn "hanamaru" (flower circle) mark, the classic Japanese school "correct".
 function hanamaru(E, el = $('#stamp'), style = ul.variant(S.look && S.look.mark)) {
@@ -736,6 +1048,12 @@ function drawMark(el, style, E, { preview = false } = {}) {
 // ---------------------------------------------------------------- settings & UI bindings
 function bindUI() {
   $('#open-settings').addEventListener('click', () => {
+    // The guide overlay sits above modals; close it first so settings win.
+    if (S.guideOpen) {
+      S.guideOpen = false;
+      guide.close();
+      requestAnimationFrame(layoutActors);
+    }
     S.settingsOpen = true;
     $('#settings').hidden = false;
   });
@@ -749,8 +1067,15 @@ function bindUI() {
     }
   });
   $('#open-guide').addEventListener('click', () => openGuide(true));
-  $('#start').addEventListener('click', () => {
-    if (S.sets.length > 0) startQuiz(S.sets[0].id);
+  $('#start').addEventListener('click', () => openSetSelect());
+  $('#set-select-close').addEventListener('click', () => {
+    S.setSelectOpen = false;
+    $('#set-select').hidden = true;
+  });
+  $('#import-btn').addEventListener('click', () => $('#import-file').click());
+  $('#import-file').addEventListener('change', (e) => {
+    if (e.target.files[0]) importFile(e.target.files[0]);
+    e.target.value = '';
   });
   $('#go-again').addEventListener('click', () => {
     if (S.selectedSetId) startQuiz(S.selectedSetId);
@@ -758,12 +1083,43 @@ function bindUI() {
   $('#go-title').addEventListener('click', () => showScreen('title'));
   $('#trophy-back').addEventListener('click', () => showScreen('title'));
   $('#collect-back').addEventListener('click', () => showScreen('title'));
-  $('#open-trophy').addEventListener('click', () => showScreen('trophy'));
-  $('#open-collect').addEventListener('click', () => showScreen('collect'));
+  $('#open-trophy').addEventListener('click', () => { renderTrophyList(); showScreen('trophy'); });
+  $('#open-collect').addEventListener('click', () => { renderCollect(); showScreen('collect'); });
+  $$('.tr-filter button').forEach((b) => b.addEventListener('click', () => {
+    trophyFilter = b.dataset.f;
+    $$('.tr-filter button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    renderTrophyList();
+  }));
   $('#mute').addEventListener('click', () => {
     S.muted = !S.muted;
     audio.setMuted(S.muted);
     $('#mute').setAttribute('aria-pressed', S.muted);
+  });
+  card.addEventListener('click', () => { if (S.explaining) advance(); });
+  $('#pause').addEventListener('click', () => {
+    if (S.screen !== 'play' || !S.currentSet) return;
+    quiz.pause();
+    audio.stopMusic();
+    S.paused = true;
+    $('#pause-time').textContent = `第${S.questionIndex + 1}問 / ${S.currentSet.questions.length}問`;
+    $('#pause-menu').hidden = false;
+  });
+  $('#pause-resume').addEventListener('click', () => {
+    $('#pause-menu').hidden = true;
+    S.paused = false;
+    quiz.resume();
+    audio.startMusic();
+  });
+  $('#pause-retire').addEventListener('click', () => {
+    $('#pause-menu').hidden = true;
+    S.paused = false;
+    S.explaining = false;
+    clearTimeout(S.explainTimer);
+    S.currentSet = null;
+    audio.stopMusic();
+    showScreen('title');
+    renderQuests();
+    renderCalendar();
   });
   $('#reset-data').addEventListener('click', () => {
     if (confirm('すべてのデータをリセットしますか？')) {
@@ -789,6 +1145,16 @@ function bindUI() {
   });
   $('#close-day').addEventListener('click', () => {
     $('#day-log').hidden = true;
+  });
+  $('#cal-prev').addEventListener('click', () => {
+    calCursor.m -= 1;
+    if (calCursor.m < 0) { calCursor.m = 11; calCursor.y -= 1; }
+    renderCalendar();
+  });
+  $('#cal-next').addEventListener('click', () => {
+    calCursor.m += 1;
+    if (calCursor.m > 11) { calCursor.m = 0; calCursor.y += 1; }
+    renderCalendar();
   });
   
   // Settings toggles
@@ -848,6 +1214,9 @@ async function init() {
   
   // Load sets
   await initSets();
+  renderQuests();
+  renderCalendar();
+  renderTrophyBadge();
   
   // Check guide
   if (!store.hasSeenGuide()) {

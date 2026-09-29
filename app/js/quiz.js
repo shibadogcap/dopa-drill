@@ -6,6 +6,10 @@ export class QuizEngine {
     // (local dev / bundled data); set an http(s) URL to load from the web.
     this.base = 'questions/';
     this.sets = [];
+    // In-memory question bundles (e.g. imported from a file), keyed by set id.
+    this.bundles = {};
+    this.paused = false;
+    this.pauseStart = 0;
     this.currentSet = null;
     this.currentQuestionIndex = 0;
     this.score = 0;
@@ -37,10 +41,53 @@ export class QuizEngine {
     return this.sets;
   }
 
+  // Register a full set object loaded from elsewhere (file import).
+  // Returns the normalized set id.
+  addBundle(raw, hint = '') {
+    const norm = (s) => ({
+      id: '',
+      title: hint,
+      passScore: 85,
+      timeLimit: 2700,
+      type: 'truefalse',
+      ...s,
+    });
+    const set = norm(raw);
+    let id = String(set.id || hint || `imported-${Date.now()}`).toLowerCase().replace(/[^a-z0-9-]+/g, '-') || `imported-${Date.now()}`;
+    let n = 1;
+    const taken = new Set([...this.sets.map((s) => s.id), ...Object.keys(this.bundles)]);
+    let uid = id;
+    while (taken.has(uid)) uid = `${id}-${++n}`;
+    set.id = uid;
+    if (!Array.isArray(set.questions) || !set.questions.length) throw new Error('no questions');
+    set.questions = set.questions.map((q, i) => ({
+      id: q.id || `q${i + 1}`,
+      type: q.type || 'truefalse',
+      text: q.text || '',
+      options: Array.isArray(q.options) && q.options.length >= 2 ? q.options.slice(0, 4) : ['正解', '不正解'],
+      answer: Math.min(Math.max(0, q.answer | 0), 3),
+      explanation: q.explanation || '',
+      ...(q.image ? { image: q.image } : {}),
+      ...(q.explanationImage ? { explanationImage: q.explanationImage } : {}),
+    }));
+    this.bundles[uid] = set;
+    return set;
+  }
+
   async loadSet(setId) {
+    if (this.bundles[setId]) {
+      this.currentSet = this.bundles[setId];
+      this.resetRun();
+      return this.currentSet;
+    }
     const res = await fetch(`${this.base}${setId}.json`);
     if (!res.ok) throw new Error(`Failed to load set ${setId}`);
     this.currentSet = await res.json();
+    this.resetRun();
+    return this.currentSet;
+  }
+
+  resetRun() {
     this.currentQuestionIndex = 0;
     this.score = 0;
     this.correctCount = 0;
@@ -49,9 +96,23 @@ export class QuizEngine {
     this.maxCombo = 0;
     this.answers = [];
     this.startTime = Date.now();
+    this.paused = false;
+    this.pauseStart = 0;
     this.timeLimit = this.currentSet.timeLimit;
     this.passScore = this.currentSet.passScore;
-    return this.currentSet;
+  }
+
+  pause() {
+    if (this.paused || !this.currentSet) return;
+    this.paused = true;
+    this.pauseStart = Date.now();
+  }
+
+  resume() {
+    if (!this.paused) return;
+    this.startTime += Date.now() - this.pauseStart;
+    this.paused = false;
+    this.pauseStart = 0;
   }
 
   getCurrentQuestion() {
@@ -113,7 +174,8 @@ export class QuizEngine {
 
   getRemainingTime() {
     if (!this.timeLimit) return 0;
-    const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+    const now = this.paused ? this.pauseStart : Date.now();
+    const elapsed = Math.floor((now - this.startTime) / 1000);
     return Math.max(0, this.timeLimit - elapsed);
   }
 }
