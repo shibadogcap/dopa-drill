@@ -82,9 +82,10 @@ function showScreen(name) {
   requestAnimationFrame(layoutActors);
 }
 
-function layoutActors() {
+function layoutActors(soft = false) {
   if (S.scene || S.guideOpen) return;
-  hero.begin();
+  // Soft relayouts (scroll) must not interrupt hops and celebrations.
+  if (!soft) hero.begin();
   let r;
   if (S.settingsOpen || S.bonusOpen || S.confirm || S.trophyOpen || S.skillInfo) {
     const c = $(S.bonusOpen ? '#bonus .modal-card' : S.confirm ? '#confirm .modal-card' : S.trophyOpen ? '#trophy-got .modal-card' : S.skillInfo ? '#skill-info .modal-card' : '#settings .modal-card').getBoundingClientRect();
@@ -1255,6 +1256,21 @@ addEventListener('resize', () => requestAnimationFrame(() => {
   layoutActors();
 }));
 
+// Keep the mascot glued to its anchor while scrollable screens move.
+let scrollRaf = 0;
+function onScrollLayout() {
+  if (scrollRaf) return;
+  scrollRaf = requestAnimationFrame(() => { scrollRaf = 0; layoutActors(true); });
+}
+function watchScroll() {
+  $$('.screen, .modal-card').forEach((el) => {
+    if (!el.dataset.scrollWatched) {
+      el.dataset.scrollWatched = '1';
+      el.addEventListener('scroll', onScrollLayout, { passive: true });
+    }
+  });
+}
+
 // ---------------------------------------------------------------- init
 async function init() {
   // Dev-only annotation toolbar (never bundled into production builds).
@@ -1263,6 +1279,7 @@ async function init() {
   }
   startClock();
   bindUI();
+  watchScroll();
   
   // Load settings
   const st = store.load();
