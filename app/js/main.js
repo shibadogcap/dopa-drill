@@ -284,7 +284,7 @@ function enterPlay(countPlay = true) {
     }
   }
   updateTally();
-  try { refreshLook(); } catch { /* look modules optional */ }
+  try { refreshPlayLook(); } catch { /* look modules optional */ }
   audio.key = 0;
   audio.startMusic();
   audio.jingle();
@@ -357,8 +357,10 @@ async function setupQuestion() {
   applyLevel(E);
   const last = S.questionIndex === S.currentSet.questions.length - 1;
   const run = S.run;
+  // Long sets would cut in on every question past ~Q22 (E > 0.22);
+  // keep it to milestones so it stays special.
   if (last) cutin('ラスト1問', E);
-  else if (E > 0.22) cutin(`第${S.questionIndex + 1}問`, E);
+  else if ((S.questionIndex + 1) % 10 === 0) cutin(`第${S.questionIndex + 1}問`, E);
   await cardEnter(E);
   if (S.screen !== 'play' || run !== S.run) return;
   S.ready = true;
@@ -734,6 +736,19 @@ function applyLook(look) {
 }
 
 function refreshLook() {
+  // Title shows fixed choices (stable look); plays may vary via おまかせ.
+  const eq = equipState();
+  const got = gotMap();
+  const look = {};
+  for (const { key } of ul.CATS) {
+    const want = eq[key];
+    const base = ul.ITEMS.find((it) => it.cat === key && it.base);
+    look[key] = want && want !== 'auto' && ul.isUnlocked(ul.ITEM[want], got) ? want : base.id;
+  }
+  applyLook(look);
+}
+
+function refreshPlayLook() {
   applyLook(ul.pickLook(equipState(), gotMap(), S.rng || Math.random));
 }
 
@@ -1342,6 +1357,9 @@ async function init() {
   $('#motion').value = (st.settings.motion ?? 1) * 100;
   $('#motion-val').textContent = `${Math.round((st.settings.motion ?? 1) * 100)}%`;
   $('#data-url').value = st.settings.dataUrl || '';
+  const plays = st.history.length;
+  $('#storage-note').textContent =
+    `連続記録 ${st.loginStreak || 0}日・プレイ ${plays}回・最終 ${st.lastLogin || 'なし'}`;
   
   // Load sets
   await initSets();
